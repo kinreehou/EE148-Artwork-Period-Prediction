@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 
 class ArtDataset(Dataset):
-	def __init__(self,  csv_file, img_dir, transform=None): 
+	def __init__(self,  csv_file, img_dir, transform=None):
 		"""
 		Args:
 			csv_file (string): Path to the csv file with annotations.
@@ -27,34 +27,34 @@ class ArtDataset(Dataset):
 			transform (callable, optional): Optional transform to be applied
 				on a sample.
 		"""
-		
+
 		self.data_info = pd.read_csv(csv_file)
 		self.img_dir = img_dir
 		self.transform = transform
-		
+
 	def __len__(self):
 		return len(self.data_info)
-	
+
 	def __getitem__(self, idx):
 		if torch.is_tensor(idx):
 			idx = idx.tolist()
-			
+
 		img_name = os.path.join(self.img_dir,
 								self.data_info.iloc[idx, 0])
-		
+
 		image = Image.open(img_name).convert('RGB')
-		
+
 		a = np.asarray(image)
 		#print(a.shape, img_name)
 		label = self.data_info.iloc[idx, 1]
-		
+
 		if self.transform:
 			image = self.transform(image)
-			
+
 		sample = {'image': image, 'label': label}
 		return sample
 
-art_data_tensor = ArtDataset(csv_file = 'train_all_classes.csv', img_dir = 'train/', 
+art_data_tensor = ArtDataset(csv_file = 'train_all_classes.csv', img_dir = 'train/',
 					 transform = transforms.Compose([transforms.Resize((224,224)), transforms.ToTensor(),
 													 transforms.Normalize(mean=[0.485, 0.456, 0.406],
 																		  std=[0.229, 0.224, 0.225])]))
@@ -75,7 +75,7 @@ test_loader = torch.utils.data.DataLoader(art_data_tensor, batch_size=32,
 data_sizes = {}
 data_sizes['train'] = len(subset_indices_train)
 data_sizes['val'] = len(subset_indices_valid)
-							
+
 def test(model, device, test_loader):
 	model.eval()    # Set the model to inference mode
 	test_loss = 0
@@ -114,7 +114,7 @@ def test(model, device, test_loader):
 	print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
 		test_loss, correct, test_num,
 		100. * correct / test_num))
-	
+
 use_cuda = torch.cuda.is_available()
 device = torch.device("cuda" if use_cuda else "cpu")
 
@@ -124,10 +124,10 @@ def set_parameter_requires_grad(model, feature_extracting):
 	if feature_extracting:
 		for param in model.parameters():
 			param.requires_grad = False
-			
+
 
 # Models to choose from [resnet, alexnet, vgg, squeezenet, densenet, inception]
-model_name = "resnet"
+model_name = "densenet"
 
 # Number of classes in the dataset
 num_classes = 5
@@ -136,14 +136,14 @@ num_classes = 5
 batch_size = 32
 
 # Number of epochs to train for
-num_epochs = 5
+num_epochs = 30
 
 # Flag for feature extracting. When False, we finetune the whole model,
 #   when True we only update the reshaped layer params
 feature_extract = True
 
 
-def train_model(model, dataloaders, data_sizes, criterion, optimizer, num_epochs=25, is_inception=False):
+def train_model(model, dataloaders, data_sizes, criterion, optimizer, name, num_epochs=25, is_inception=False):
 	since = time.time()
 
 	val_acc_history = []
@@ -166,7 +166,7 @@ def train_model(model, dataloaders, data_sizes, criterion, optimizer, num_epochs
 			running_corrects = 0
 
 			# Iterate over data.
-			for i, x in tqdm(enumerate(dataloaders[phase]), total = len(dataloaders[phase])):  
+			for i, x in tqdm(enumerate(dataloaders[phase]), total = len(dataloaders[phase])):
 				inputs = x['image']
 				labels = x['label']
 				inputs = inputs.to(device)
@@ -203,7 +203,7 @@ def train_model(model, dataloaders, data_sizes, criterion, optimizer, num_epochs
 				running_loss += loss.item() * inputs.size(0)
 				running_corrects += torch.sum(preds == labels.data)
 				#print(phase, preds-labels.data)
-			   
+
 
 			epoch_loss = running_loss / data_sizes[phase]
 			epoch_acc = running_corrects.double() / data_sizes[phase]
@@ -218,7 +218,8 @@ def train_model(model, dataloaders, data_sizes, criterion, optimizer, num_epochs
 			if phase == 'val':
 				val_acc_history.append(epoch_acc)
 
-		
+	name += '.pt'
+	torch.save(model.state_dict(), name)
 
 	time_elapsed = time.time() - since
 	print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
@@ -338,5 +339,4 @@ dataloaders['val'] = val_loader
 criterion = nn.CrossEntropyLoss()
 
 # Train and evaluate
-model_ft, hist = train_model(model_ft, dataloaders, data_sizes, criterion, optimizer_ft, num_epochs=num_epochs, is_inception=(model_name=="inception"))	
-		
+model_ft, hist = train_model(model_ft, dataloaders, data_sizes, criterion, optimizer_ft, model_name, num_epochs=num_epochs, is_inception=(model_name=="inception"))
